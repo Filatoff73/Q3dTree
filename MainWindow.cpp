@@ -1,17 +1,19 @@
 #include "MainWindow.h"
 
-#include <QGuiApplication>
 #include "QTime"
 #include "qmath.h"
 
+#include <QOrbitCameraController>
+#include <QComponent>
+#include <QMesh>
+#include <QAttribute>
+#include <QBuffer>
 
-MainWindow::MainWindow(QWindow *screen) :
-    Qt3D::QWindow(screen)
+MainWindow::MainWindow(QScreen *screen) :
+    Qt3DExtras::Qt3DWindow(screen)
 {
-
-
     nodCount = 3;
-    maxSubNodCount = 30;
+    maxSubNodCount = 15;
 
     radSphere=2.0;
     step = 0.1;
@@ -21,23 +23,22 @@ MainWindow::MainWindow(QWindow *screen) :
     maxY = 20;
     maxZ = 20;
 
-    Qt3D::QInputAspect *input = new Qt3D::QInputAspect;
-    registerAspect(input);
-
     // Root entity
-    rootEntity = new Qt3D::QEntity();
+    rootEntity = new Qt3DCore::QEntity();
 
     // Camera
-    Qt3D::QCamera *cameraEntity = defaultCamera();
+    Qt3DRender::QCamera *camera = this->camera();
+    camera->lens()->setPerspectiveProjection(100.0f, 16.0f/9.0f, 0.1f, 1000.0f);
+    camera->setPosition(QVector3D(0, 0, 40.0f));
+    camera->setViewCenter(QVector3D(0, 0, 0));
 
-    cameraEntity->lens()->setPerspectiveProjection(80.0f, 16.0f/9.0f, 0.1f, 1000.0f);
-    cameraEntity->setPosition(QVector3D(0, 0, -40.0f));
-    cameraEntity->setUpVector(QVector3D(0, 1, 0));
-    cameraEntity->setViewCenter(QVector3D(0, 0, 0));
-    input->setCamera(cameraEntity);
+    // For camera controls
+    Qt3DExtras::QOrbitCameraController *camController = new Qt3DExtras::QOrbitCameraController(rootEntity);
+    camController->setLinearSpeed( 50.0f );
+    camController->setLookSpeed( 180.0f );
+    camController->setCamera(camera);
 
     setRootEntity(rootEntity);
-
 
 }
 
@@ -52,39 +53,58 @@ void MainWindow::addSpheres()
     QTime midnight(0,0,0);
     qsrand(midnight.secsTo(QTime::currentTime()));
 
+    // Генерируем первый узел дерева
+    // Material
+    Qt3DExtras::QPhongMaterial *material = new Qt3DExtras::QPhongMaterial(rootEntity);
+    material->setAmbient(QColor(Qt::black));
+    // Sphere
+    Qt3DCore::QEntity *sphereEntity = new Qt3DCore::QEntity(rootEntity);
+
+    // Transform
+    Qt3DCore::QTransform *sphereTransform = new Qt3DCore::QTransform;
+    sphereTransform->setTranslation(QVector3D(0,0,0));
+    Qt3DExtras::QSphereMesh *sphereMesh = new Qt3DExtras::QSphereMesh;
+    sphereMesh->setRadius(radSphere);
+    sphereEntity->addComponent(sphereMesh);
+    sphereEntity->addComponent(material);
+    sphereEntity->addComponent(sphereTransform);
+    listPosition.append(QVector3D(0,0,0));
+    listRad.append(radSphere);
+
+    QVector<int> amountParentNodes;
+    for(int i=0;i<nodCount+1;i++)
+        amountParentNodes.append(0);
+    //Изначальное количество родлительских узлов - 1, черный
+    amountParentNodes[0]=1;
+
 
     for(int i=0;i<nodCount;i++)
     {
         // Material
-        Qt3D::QPhongMaterial *material = new Qt3D::QPhongMaterial(rootEntity);
+        Qt3DExtras::QPhongMaterial *material = new Qt3DExtras::QPhongMaterial(rootEntity);
         int r = rand() % 255;
         int g = rand() % 255;
         int b = rand() % 255;
         material->setAmbient(QColor(r,g,b));
 
-        //случайное количество подузлов
-        int maxSubNodCountReal = rand() % (maxSubNodCount+1);
-        if(maxSubNodCountReal==0)
-            maxSubNodCountReal=1;
+        int amountParenNodesCurrent = amountParentNodes.at(i);
 
         //нормаль
         QVector3D norm;
         //первая точка
         QVector3D firstPoint;
 
-        for(int j=0;j<maxSubNodCountReal;j++)
+        for(int parentNodes = 0;parentNodes<amountParenNodesCurrent;parentNodes++)
         {
-            // Sphere
-            Qt3D::QEntity *sphereEntity = new Qt3D::QEntity(rootEntity);
 
-            //координаты для добавления сферы
-            QVector3D point;
-
-            //радиус
-            double rad = radSphere;
+         //случайное количество подузлов
+            int maxSubNodCountReal = rand() % (maxSubNodCount+1);
+            if(maxSubNodCountReal==0)
+                maxSubNodCountReal=1;
 
             //!Если сфера первая - задаем ее координаты и координаты нормали случайным образом
-            if(j==0)
+            //! для получения уравнения плоскости
+            if(parentNodes==0)
             {
                 norm.setX(randValue(2)*maxX);
                 norm.setY(randValue(2)*maxY);
@@ -93,49 +113,54 @@ void MainWindow::addSpheres()
                 firstPoint.setX(randValue(2)*maxX);
                 firstPoint.setY(randValue(2)*maxY);
                 firstPoint.setZ(randValue(2)*maxZ);
-
-                point = firstPoint;
-
             }
-            else
+
+            for(int j=0;j<maxSubNodCountReal;j++)
             {
+                //Считаем сколько будет узлов на следующей итерации
+                amountParentNodes[i+1]++;
+                // Sphere
+                Qt3DCore::QEntity *sphereEntity = new Qt3DCore::QEntity(rootEntity);
+
+                //координаты для добавления сферы
+                QVector3D point;
+
+                //радиус
+                double rad = radSphere;
 
                 point.setX(randValue(2)*maxX);
                 point.setY(randValue(2)*maxY);
                 point.setZ(findZforXY(norm,firstPoint,point.x(),point.y()));
-                while(fabs(point.z())>maxZ)
+                int k=0;
+                while(fabs(point.z())>maxZ && k<100)
                 {
                     point.setX(randValue(2)*maxX);
                     point.setY(randValue(2)*maxY);
                     point.setZ(findZforXY(norm,firstPoint,point.x(),point.y()));
+                    k++;
                 }
 
+//                qDebug()<<"___";
+//                qDebug()<<point.x();
+//                qDebug()<<point.y();
+//                qDebug()<<point.z();
+//                qDebug()<<"___";
+                checkAndChangeSpherePosition(norm,firstPoint,point,rad);
+
+                // Transform
+                Qt3DCore::QTransform *sphereTransform = new Qt3DCore::QTransform;
+                sphereTransform->setTranslation(point);
+
+                Qt3DExtras::QSphereMesh *sphereMesh = new Qt3DExtras::QSphereMesh;
+                sphereMesh->setRadius(rad);
+
+                sphereEntity->addComponent(sphereMesh);
+                sphereEntity->addComponent(material);
+                sphereEntity->addComponent(sphereTransform);
+                listPosition.append(point);
+                listRad.append(rad);
+
             }
-
-            qDebug()<<"___";
-            qDebug()<<point.x();
-            qDebug()<<point.y();
-            qDebug()<<point.z();
-            qDebug()<<"___";
-            checkAndChangeSpherePosition(norm,firstPoint,point,rad);
-
-            // Transform
-            Qt3D::QTransform *sphereTransform = new Qt3D::QTransform;
-            Qt3D::QTranslateTransform *sphereTranslateTransform = new Qt3D::QTranslateTransform;
-            sphereTranslateTransform->setTranslation(point);
-            sphereTransform->addTransform(sphereTranslateTransform);
-
-            Qt3D::QSphereMesh *sphereMesh = new Qt3D::QSphereMesh;
-            sphereMesh->setRadius(rad);
-
-
-            sphereEntity->addComponent(sphereMesh);
-            sphereEntity->addComponent(material);
-            sphereEntity->addComponent(sphereTransform);
-            listPosition.append(point);
-            listRad.append(rad);
-
-
         }
 
 
@@ -177,7 +202,7 @@ void MainWindow::checkAndChangeSpherePosition(const QVector3D &norm, const QVect
             {
                 rad-=step;
                 mustMove=true;
-                qDebug()<<"rad reduced"<<rad;
+                //qDebug()<<"rad reduced"<<rad;
             }
         }
     }
@@ -202,7 +227,7 @@ void MainWindow::checkAndChangeSpherePosition(const QVector3D &norm, const QVect
                 point.setY(point.y()+step);
                 point.setZ(findZforXY(norm,firstPoint,point.x(),point.y()));
                 mustMove=true;
-                qDebug()<<"moved"<<point;
+                //qDebug()<<"moved"<<point;
             }
         }
         k++;

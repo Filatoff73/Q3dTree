@@ -2,36 +2,33 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <Qt3DRenderer/QWindow>
+#include <QGuiApplication>
+
 #include <Qt3DCore/QEntity>
-#include <Qt3DCore/QCamera>
-#include <Qt3DCore/QCameraLens>
+#include <Qt3DRender/QCamera>
+#include <Qt3DRender/QCameraLens>
 #include <Qt3DCore/QTransform>
-#include <Qt3DCore/QLookAtTransform>
-#include <Qt3DCore/QScaleTransform>
-#include <Qt3DCore/QRotateTransform>
-#include <Qt3DCore/QTranslateTransform>
 #include <Qt3DCore/QAspectEngine>
 
+
 #include <Qt3DInput/QInputAspect>
-
-#include <Qt3DRenderer/QRenderAspect>
-#include <Qt3DRenderer/QFrameGraph>
-#include <Qt3DRenderer/QForwardRenderer>
-#include <Qt3DRenderer/QPhongMaterial>
-
-#include <Qt3DRenderer/QCylinderMesh>
-#include <Qt3DRenderer/QSphereMesh>
-#include <Qt3DRenderer/QTorusMesh>
-#include <Qt3DRenderer/QWindow>
+#include "qt3dwindow.h"
+#include <Qt3DRender/QRenderAspect>
+#include <Qt3DExtras//QForwardRenderer>
+#include <Qt3DExtras//QPhongMaterial>
+#include <Qt3DExtras/QCylinderMesh>
+#include <Qt3DExtras/QSphereMesh>
+#include <QWindow>
 #include <QMap>
 
-class MainWindow : public Qt3D::QWindow
+#include <QGuiApplication>
+
+class MainWindow : public Qt3DExtras::Qt3DWindow
 {
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWindow *screen = 0);
+    explicit MainWindow(QScreen *screen = 0);
     ~MainWindow();
 
     //!Добавление всех сфер
@@ -52,7 +49,7 @@ public:
     void setMaxSubNodCount(int value);
 
 private:
-    Qt3D::QEntity *rootEntity;
+    Qt3DCore::QEntity *rootEntity;
     int nodCount;
     int maxSubNodCount;
     double radSphere;
@@ -64,6 +61,7 @@ private:
     //! макисмальное количество итераций для движения сферы
     int maxCountStep;
 
+    //! Cписки позиций чтобы двигать сферы и менять их радиусы
     QList<QVector3D> listPosition;
     QList<double> listRad;
 
